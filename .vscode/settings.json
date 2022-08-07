@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "xstring": "cpp",
+        "iosfwd": "cpp",
+        "array": "cpp",
+        "forward_list": "cpp",
+        "new": "cpp",
+        "xutility": "cpp",
+        "ostream": "cpp",
+        "vector": "cpp",
+        "xiosbase": "cpp"
+    }
+}
