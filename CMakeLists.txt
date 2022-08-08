@@ -20,7 +20,7 @@ if (Is_Include_OpenCV)
     include_directories(${OpenCV_INCLUDE_DIRS})
     link_directories(${OpenCV_LIBRARY_DIRS}) 
     target_link_libraries(${Project_Name} ${OpenCV_LIBS})
-endif() 
+endif()
 
 if(Is_Include_FreeGlut)
     target_include_directories(${Project_Name} PRIVATE "D:/ZH/freeglut-3.2.2/include")

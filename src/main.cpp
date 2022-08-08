@@ -13,6 +13,7 @@
 
 #include "settings.h"
 #include "shader.hpp"
+#include "utils/hdrloader.h"
 
 #include <typeinfo>
 
@@ -21,9 +22,16 @@ using namespace std;
 Shader shader;
 uint32_t frame_counter = 0;
 
+GLuint hdr_map;
+
 void display(void)
 {
     shader.use();
+    glActiveTexture(GL_TEXTURE0);  // TEXTURE0 is actived as default
+    glBindTexture(GL_TEXTURE_2D, hdr_map);
+    glUniform1i(glGetUniformLocation(shader.get_program(), "hdr_map"), 0);
+    // glBindTexture(GL_TEXTURE_2D, 0);
+
     glUniform1ui(glGetUniformLocation(shader.get_program(), "frame_counter"), ++frame_counter);
     shader.unuse();
 
@@ -55,7 +63,22 @@ int main(int argc, char** argv)
     shader = Shader("../../src/shader/vertex.vert", "../../src/shader/fragment.frag");
     shader.init_buffer();
 
+    HDRLoaderResult hdr_res;
+    if (!HDRLoader::load("../../texture/circus_arena_4k.hdr", hdr_res)) {
+        std::cout << "Cannot open hdr" << std::endl;
+        exit(-1);
+    }
+    hdr_map = shader.generate_texture_RGBA32F(hdr_res.width, hdr_res.height);
+    std::cout << hdr_res.width << " " << hdr_res.height << std::endl;
+    glBindTexture(GL_TEXTURE_2D, hdr_map);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, hdr_res.width, hdr_res.height, 0, GL_RGB, GL_FLOAT, hdr_res.cols);  // RGBA will crash!
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    /* Deliver uniform, glUseProgram() is necessary */
     shader.use();
+
+   
+
     glUniform1ui(glGetUniformLocation(shader.get_program(), "width"), Settings::WIDTH);
     glUniform1ui(glGetUniformLocation(shader.get_program(), "height"), Settings::HEIGHT);
     shader.unuse();
@@ -85,7 +108,7 @@ int main(int argc, char** argv)
     glutMainLoop(); // main loop
 
     // Properly de-allocate all resources once they've outlived their purpose
-  
+
     std::cout << "Exit" << std::endl;
 
     return 0;

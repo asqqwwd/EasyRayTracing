@@ -90,13 +90,13 @@ public:
         glEnableVertexAttribArray(0);  // enable 0 vertex attributes (data in GPU buffer is visible to vertex shader), the supported num of input attributes is at least 16
         glBindBuffer(GL_ARRAY_BUFFER, 0); // Note that this is allowed, the call to glVertexAttribPointer registered VBO as the currently bound vertex buffer object so afterwards we can safely unbind
 
-        frame_color_attach_ = _generate_color_attach_for_frame_buffer();
+        frame_color_attach_ = generate_texture_RGBA32F(Settings::WIDTH,Settings::HEIGHT);
         glBindTexture(GL_TEXTURE_2D, frame_color_attach_);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frame_color_attach_, 0);  // attach it to currently bound framebuffer object
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frame_color_attach_, 0);  // attach it to currently bound framebuffer object
-        const GLenum buffers[]{ GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-        glDrawBuffers(2, buffers);
+        const GLenum buffers[]{ GL_COLOR_ATTACHMENT0 };
+        glDrawBuffers(1, buffers);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
             exit(-1);
@@ -112,30 +112,47 @@ public:
         glUseProgram(program_);
 
         /* Pass 1 */
-        glBindFramebuffer(GL_FRAMEBUFFER, FBO);  // self-defined frame buffer, cannot be rendered to the viewport diretly
-        glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
-        glClearColor(0.0, 0.0, 0.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
+        // glBindFramebuffer(GL_FRAMEBUFFER, FBO);  // self-defined frame buffer, cannot be rendered to the viewport diretly
+        // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
+        // glClearColor(0.0, 0.0, 0.0, 1.0);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // glDisable(GL_DEPTH_TEST);
 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
+        // glBindVertexArray(VAO);
+        // glDrawArrays(GL_TRIANGLES, 0, 6);
+        // glBindVertexArray(0);
 
         /* Pass 2 */
         glBindFramebuffer(GL_FRAMEBUFFER, 0);  // default frame buffer
-        glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
-        glClearColor(0.0, 0.0, 0.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
+        // glClearColor(0.0, 0.0, 0.0, 1.0);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
 
         glBindVertexArray(VAO);
-        glBindTexture(GL_TEXTURE_2D, frame_color_attach_);  // Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture. 
+        // glBindTexture(GL_TEXTURE_2D, frame_color_attach_);  // Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture. 
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
 
 
         glUseProgram(0);
+    }
+
+    GLuint generate_texture_RGBA32F(size_t width, size_t height) {
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, NULL);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        return texture;
     }
 
     GLuint get_program(){
@@ -154,19 +171,4 @@ private:
 
     GLuint program_;
     GLuint frame_color_attach_;
-
-    GLuint _generate_color_attach_for_frame_buffer() {
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, Settings::WIDTH, Settings::HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        return texture;
-    }
 };
