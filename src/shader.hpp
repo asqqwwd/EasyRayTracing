@@ -8,6 +8,7 @@
 
 #include "settings.h"
 #include "utils/loader.h"
+#include "utils/hdrloader.h"
 
 using namespace glm;
 
@@ -17,7 +18,7 @@ public:
     Shader() {
 
     }
-    Shader(const std::string& vertex_path, const std::string& fragment_path) {
+    void create_program(const std::string& vertex_path, const std::string& fragment_path, size_t k) {
         GLint success;
         GLchar info_log[512];
 
@@ -65,8 +66,16 @@ public:
         glDeleteShader(vert_shader);
         glDeleteShader(frag_shader);
 
-        program_ = shader_program;
+        if (k == 1) {
+            program1_ = shader_program;
+        }
+        else if (k == 2) {
+            program2_ = shader_program;
+        }
+        else {
+            throw std::logic_error("Out of range");
 
+        }
     }
 
     ~Shader() {
@@ -76,66 +85,94 @@ public:
     }
 
     void init_buffer() {
-        glGenFramebuffers(1, &FBO);
-        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
         glGenVertexArrays(1, &VAO);
         glBindVertexArray(VAO);
         glGenBuffers(1, &VBO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
         std::vector<vec3> square = { vec3(-1, -1, 0), vec3(1, -1, 0), vec3(-1, 1, 0), vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0) };
         glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * square.size(), NULL, GL_STATIC_DRAW);  // create empty buffer in GPU
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec3) * square.size(), &square[0]);  // padding buffer
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);  // how to parse the buffer
         glEnableVertexAttribArray(0);  // enable 0 vertex attributes (data in GPU buffer is visible to vertex shader), the supported num of input attributes is at least 16
         glBindBuffer(GL_ARRAY_BUFFER, 0); // Note that this is allowed, the call to glVertexAttribPointer registered VBO as the currently bound vertex buffer object so afterwards we can safely unbind
+        glBindVertexArray(0); // Unbind VAO (it's always a good thing to unbind any buffer/array to prevent strange bugs)
 
-        frame_color_attach_ = generate_texture_RGBA32F(Settings::WIDTH,Settings::HEIGHT);
+        glGenFramebuffers(1, &FBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+        frame_color_attach_ = generate_texture_RGBA32F(Settings::WIDTH, Settings::HEIGHT);
         glBindTexture(GL_TEXTURE_2D, frame_color_attach_);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frame_color_attach_, 0);  // attach it to currently bound framebuffer object
-        glBindTexture(GL_TEXTURE_2D, 0);
+        // const GLenum buffers[]{ GL_COLOR_ATTACHMENT0 };
+        // glDrawBuffers(1, buffers);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        const GLenum buffers[]{ GL_COLOR_ATTACHMENT0 };
-        glDrawBuffers(1, buffers);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
             exit(-1);
         }
 
-
-        glBindVertexArray(0); // Unbind VAO (it's always a good thing to unbind any buffer/array to prevent strange bugs)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        HDRLoaderResult hdr_res;
+        if (!HDRLoader::load("../../texture/circus_arena_4k.hdr", hdr_res)) {
+            std::cout << "Cannot open hdr" << std::endl;
+            exit(-1);
+        }
+        hdr_map = generate_texture_RGBA32F(hdr_res.width, hdr_res.height);
+        std::cout << hdr_res.width << " " << hdr_res.height << std::endl;
+        glBindTexture(GL_TEXTURE_2D, hdr_map);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, hdr_res.width, hdr_res.height, 0, GL_RGB, GL_FLOAT, hdr_res.cols);  // RGBA will crash!
     }
 
 
     void draw() {
-        glUseProgram(program_);
 
         /* Pass 1 */
-        // glBindFramebuffer(GL_FRAMEBUFFER, FBO);  // self-defined frame buffer, cannot be rendered to the viewport diretly
-        // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
-        // glClearColor(0.0, 0.0, 0.0, 1.0);
-        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        // glDisable(GL_DEPTH_TEST);
+        use(1);
 
-        // glBindVertexArray(VAO);
-        // glDrawArrays(GL_TRIANGLES, 0, 6);
-        // glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE0);  // TEXTURE0 is actived as default
+        glBindTexture(GL_TEXTURE_2D, hdr_map);
+        glUniform1i(glGetUniformLocation(program1_, "hdr_map"), 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, frame_color_attach_);
+        glUniform1i(glGetUniformLocation(program1_, "last_frame"), 1);
 
-        /* Pass 2 */
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);  // default frame buffer
+        glUniform1ui(glGetUniformLocation(program1_, "frame_counter"), frame_counter);
+        glUniform1ui(glGetUniformLocation(program1_, "width"), Settings::WIDTH);
+        glUniform1ui(glGetUniformLocation(program1_, "height"), Settings::HEIGHT);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);  // self-defined frame buffer, cannot be rendered to the viewport diretly
         // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
         // glClearColor(0.0, 0.0, 0.0, 1.0);
         // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
 
         glBindVertexArray(VAO);
-        // glBindTexture(GL_TEXTURE_2D, frame_color_attach_);  // Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture. 
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
 
+        unuse();
 
-        glUseProgram(0);
+
+        /* Pass 2 */
+        use(2);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, frame_color_attach_);  // Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture. 
+        glUniform1i(glGetUniformLocation(program2_, "last_frame"), 0);
+        // glBindTexture(GL_TEXTURE_2D, 0);  // import! cannot be implemented
+
+        // glBindFramebuffer(GL_FRAMEBUFFER, 0);  // default frame buffer
+        // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
+        // glClearColor(0.0, 0.0, 0.0, 1.0);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+
+        unuse();
+
+        ++frame_counter;
     }
 
     GLuint generate_texture_RGBA32F(size_t width, size_t height) {
@@ -150,25 +187,44 @@ public:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        glBindTexture(GL_TEXTURE_2D, 0);
-
         return texture;
     }
 
-    GLuint get_program(){
-        return program_;
+    GLuint get_program(size_t k) {
+        if (k == 1) {
+            return program1_;
+        }
+        else if (k == 2) {
+            return program2_;
+        }
+        else {
+            throw std::logic_error("Out of range");
+            return 0;
+        }
     }
 
-    void use(){
-        glUseProgram(program_);
+    void use(size_t k) {
+        if (k == 1) {
+            glUseProgram(program1_);
+        }
+        else if (k == 2) {
+            glUseProgram(program2_);
+        }
+        else {
+            throw std::logic_error("Out of range");
+        }
     }
 
-    void unuse(){
+    void unuse() {
         glUseProgram(0);
     }
 private:
     GLuint VBO, VAO, FBO;
 
-    GLuint program_;
+    GLuint program1_;
+    GLuint program2_;
     GLuint frame_color_attach_;
+    GLuint hdr_map;
+    uint32_t frame_counter = 0;
+
 };

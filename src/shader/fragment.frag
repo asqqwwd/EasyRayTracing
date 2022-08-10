@@ -2,7 +2,8 @@
 
 /* Attributes */
 in vec3 pixel;
-layout (location = 0) out vec4 color;
+// layout (location = 0) out vec4 color;
+out vec4 color;
 
 /* Uniforms */
 uniform uint frame_counter;
@@ -10,6 +11,7 @@ uniform uint width;
 uniform uint height;
 
 uniform sampler2D hdr_map;
+uniform sampler2D last_frame;
 
 /* Define */
 #define PI 3.1415926
@@ -502,7 +504,7 @@ vec3 project_hemisphere2normal(vec3 v, vec3 N) {
 
 vec3 raymarch_hit(vec3 pos,vec3 dir,inout bool is_hit)
 {
-    for(int k=1;k<=RAYMATCH_MAX_STEP;k++)
+    for(int k=1;k<=RAYMARCH_MAX_STEP;k++)
     {
         float dis=DIST_FUNC(pos);
         if(dis>RAYMARCH_MAX_DIS){
@@ -516,23 +518,38 @@ vec3 raymarch_hit(vec3 pos,vec3 dir,inout bool is_hit)
         pos+=dis*dir;
     }
     is_hit=false;
-    return vec4(0,0,0);
+    return vec3(0,0,0);
     // return vec4(sample_hdr(dir),1);
 }
 
 vec3 raytracing(vec3 pos, vec3 dir)
 {
-    bool is_hit = false;
-    vec3 hit_pos = raymarch_hit(pos,dir,is_hit);
-    if(!is_hit){
-        return sample_hdr(dir);
-    }
-    for(int bounce=0;bounce<3;++bounce){
-        vec3 wi = project_hemisphere2normal(sample_hemisphere,get_normal(hit_pos));
-        // hit_pos = raymarch_hit(pos,wo);
-        // vec3 wi = wo;
+    vec3 ret=vec3(0,0,0);
 
+    bool is_hit = false;
+    vec3 hit_pos = pos;
+    vec3 wi=dir;
+    vec3 Li=vec3(1, 1, 1);
+    vec3 Lo;
+    for(int bounce=0;bounce<3;++bounce){
+        vec3 wo = project_hemisphere2normal(sample_hemisphere(),get_normal(hit_pos));
+
+        vec3 hit_pos=raymarch_hit(hit_pos,wi,is_hit);
+        float pdf = 1.0 / (2.0 * PI);                                  
+        float cosine_i = max(0, dot(wi, get_normal(hit_pos))); 
+        if(!is_hit){
+            ret += Li*sample_hdr(dir)/PI*cosine_i/pdf;
+            return ret;
+        }
+
+        // vec3 f_r = BaseColor/PI;           
+        Lo=Li*vec3(0.8, 0.6, 0) / PI*cosine_i/pdf;
+
+        wi=wo;
+        Li=Lo;
+        ret+=Lo;
     }
+    return ret;
 }
 
 
@@ -542,5 +559,24 @@ void main()
     vec2 AA=vec2((rand()-.5)/float(width),(rand()-.5)/float(height));
     vec4 dir=normalize(get_RT_view(camera_pos,camera_gaze-camera_pos)*vec4(pixel.xy+AA,1,0));
     
-    color=raymarch(start_postion,dir.xyz);
+    // vec3 cur_color = raytracing(start_postion,dir.xyz);
+    vec3 cur_color = vec3(0,0,0);
+    if(rand()>0.95){
+        cur_color = vec3(1,0,0);
+    }
+
+    if(frame_counter==0){
+        color = vec4(cur_color,1);
+    }
+    else{
+        vec3 last_color = texture(last_frame, pixel.xy*0.5+0.5).rgb;
+        color = vec4(last_color,1);
+    }
+
+    // // color = vec4(mix(last_color, cur_color, 1.0/float(frame_counter+1)),1);
+    // vec3 sum = cur_color+last_color;
+    // sum = clamp(sum,vec3(0,0,0 ) ,vec3(1,1,1));
+    // color = vec4(cur_color,1);
+    // color = vec4(cur_color,1);
+    // color = vec4(0.8,0.2,0,1.0);
 }
