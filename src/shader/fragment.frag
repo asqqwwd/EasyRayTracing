@@ -2,8 +2,8 @@
 
 /* Attributes */
 in vec3 pixel;
-// layout (location = 0) out vec4 color;
-out vec4 color;
+layout (location = 0) out vec4 color;
+// out vec4 color;
 
 /* Uniforms */
 uniform uint frame_counter;
@@ -518,27 +518,30 @@ vec3 raymarch_hit(vec3 pos,vec3 dir,inout bool is_hit)
         pos+=dis*dir;
     }
     is_hit=false;
-    return vec3(0,0,0);
+    return vec3(0);
     // return vec4(sample_hdr(dir),1);
 }
 
-vec3 raytracing(vec3 pos, vec3 dir)
+vec3 path_tracing(vec3 pos, vec3 dir)
 {
-    vec3 ret=vec3(0,0,0);
+    vec3 ret=vec3(0);
 
     bool is_hit = false;
     vec3 hit_pos = pos;
     vec3 wi=dir;
-    vec3 Li=vec3(1, 1, 1);
+    vec3 Li=vec3(1);
     vec3 Lo;
+    // RR停止
     for(int bounce=0;bounce<3;++bounce){
+        vec3 hit_pos=raymarch_hit(hit_pos,wi,is_hit);
+
         vec3 wo = project_hemisphere2normal(sample_hemisphere(),get_normal(hit_pos));
 
-        vec3 hit_pos=raymarch_hit(hit_pos,wi,is_hit);
         float pdf = 1.0 / (2.0 * PI);                                  
-        float cosine_i = max(0, dot(wi, get_normal(hit_pos))); 
+        float cosine_i = max(0, dot(-normalize(wi), get_normal(hit_pos))); 
         if(!is_hit){
-            ret += Li*sample_hdr(dir)/PI*cosine_i/pdf;
+            ret += Li*sample_hdr(dir)/PI*1/pdf;
+            // ret += sample_hdr(dir);
             return ret;
         }
 
@@ -559,24 +562,17 @@ void main()
     vec2 AA=vec2((rand()-.5)/float(width),(rand()-.5)/float(height));
     vec4 dir=normalize(get_RT_view(camera_pos,camera_gaze-camera_pos)*vec4(pixel.xy+AA,1,0));
     
-    // vec3 cur_color = raytracing(start_postion,dir.xyz);
-    vec3 cur_color = vec3(0,0,0);
-    if(rand()>0.95){
-        cur_color = vec3(1,0,0);
-    }
+    vec3 cur_color = path_tracing(start_postion,dir.xyz);
+    vec3 last_color = texture(last_frame, pixel.xy*0.5+0.5).rgb;
 
-    if(frame_counter==0){
-        color = vec4(cur_color,1);
-    }
-    else{
-        vec3 last_color = texture(last_frame, pixel.xy*0.5+0.5).rgb;
-        color = vec4(last_color,1);
-    }
+    // vec3 mix_color = cur_color+last_color;
+    // mix_color = clamp(mix_color, vec3(0), vec3(1));
 
-    // // color = vec4(mix(last_color, cur_color, 1.0/float(frame_counter+1)),1);
-    // vec3 sum = cur_color+last_color;
-    // sum = clamp(sum,vec3(0,0,0 ) ,vec3(1,1,1));
+    color = vec4(mix(last_color, cur_color, 1.0/float(frame_counter+1)),1);
     // color = vec4(cur_color,1);
-    // color = vec4(cur_color,1);
-    // color = vec4(0.8,0.2,0,1.0);
+
+    // 简介：使用OpenGL实现的基于符号距离函数(SDF)的光线追踪渲染器
+    // 渲染器包含两个Pass。第一个Pass进行光追渲染，并和上一帧进行混合，最后将混合结果输出到此Pass对应帧缓存中。第二个Pass将第一个Pass的帧缓存输出到窗口。
+    // 主要功能：基于HDR图像的光照(IBL)，IBL光源分解，软硬阴影，光线步进(Ray marching)求交点，基于低差异序列的蒙特卡洛路径追踪(Path tracing)，复合重要性采样，Cook-Torrance BRDF。
+    // 次要功能：OpenGL帧混合，HDR图像色调映射(Tone mapping)，简单AABB包围盒加速求交，轮盘赌(RR)控制光线弹跳次数，SDF法线向量估计。
 }

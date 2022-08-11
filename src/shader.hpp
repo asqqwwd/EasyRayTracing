@@ -102,8 +102,9 @@ public:
         frame_color_attach_ = generate_texture_RGBA32F(Settings::WIDTH, Settings::HEIGHT);
         glBindTexture(GL_TEXTURE_2D, frame_color_attach_);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frame_color_attach_, 0);  // attach it to currently bound framebuffer object
-        // const GLenum buffers[]{ GL_COLOR_ATTACHMENT0 };
+        const GLenum buffers[]{ GL_COLOR_ATTACHMENT0 };
         // glDrawBuffers(1, buffers);
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -160,7 +161,7 @@ public:
         glUniform1i(glGetUniformLocation(program2_, "last_frame"), 0);
         // glBindTexture(GL_TEXTURE_2D, 0);  // import! cannot be implemented
 
-        // glBindFramebuffer(GL_FRAMEBUFFER, 0);  // default frame buffer
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);  // default frame buffer
         // glViewport(0, 0, Settings::WIDTH, Settings::HEIGHT);
         // glClearColor(0.0, 0.0, 0.0, 1.0);
         // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
